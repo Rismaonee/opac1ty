@@ -273,7 +273,7 @@ uint32_t bf_engine_vocab_size(const BFEngine *engine) {
 }
 
 const char *bf_version(void) {
-    return "0.1.0";
+    return "1.0.2";
 }
 
 int bf_has_metal_gpu(void) {

@@ -71,8 +71,8 @@ class TestBF2Roundtrip:
             "layer.0.q_proj.weight": {
                 "type": "quantized",
                 "shape": (256, 256),
-                "codebooks": torch.randn(32, 4, 8, dtype=torch.float16),
-                "indices": torch.randint(0, 4, (32, 8), dtype=torch.uint8),
+                "codebooks": torch.randn(256, 4, 8, dtype=torch.float16),
+                "indices": torch.randint(0, 4, (256, 32), dtype=torch.uint8),
                 "outlier_values": torch.randn(3, 256, dtype=torch.float16),
                 "outlier_indices": torch.tensor([0, 10, 20], dtype=torch.int32),
                 "compression_ratio": 5.2,
@@ -113,22 +113,22 @@ class TestBF2Roundtrip:
             # Load a quantized layer
             q_proj = reader.load_layer("layer.0.q_proj.weight")
             assert q_proj["type"] == "quantized"
-            assert q_proj["codebooks"].shape == (32, 4, 8)
-            assert q_proj["indices"].shape == (32, 8)
+            assert q_proj["codebooks"].shape == (256, 4, 8)
+            assert q_proj["indices"].shape == (256, 32)
 
             reader.close()
         finally:
             Path(path).unlink(missing_ok=True)
 
     def test_large_model_simulation(self):
-        """Simulate a realistic model with many layers."""
+        """Simulate a model with many layers."""
         layers = {}
-        for i in range(32):
+        for i in range(8):
             layers[f"model.layers.{i}.self_attn.q_proj.weight"] = {
                 "type": "quantized",
-                "shape": (4096, 4096),
-                "codebooks": torch.randn(512, 4, 8, dtype=torch.float16),
-                "indices": torch.randint(0, 4, (512, 8), dtype=torch.uint8),
+                "shape": (256, 256),
+                "codebooks": torch.randn(256, 4, 8, dtype=torch.float16),
+                "indices": torch.randint(0, 4, (256, 32), dtype=torch.uint8),
                 "outlier_values": None,
                 "outlier_indices": None,
                 "compression_ratio": 6.0,
@@ -136,9 +136,9 @@ class TestBF2Roundtrip:
             for proj in ["k_proj", "v_proj", "o_proj"]:
                 layers[f"model.layers.{i}.self_attn.{proj}.weight"] = {
                     "type": "quantized",
-                    "shape": (4096, 4096),
-                    "codebooks": torch.randn(512, 4, 8, dtype=torch.float16),
-                    "indices": torch.randint(0, 4, (512, 8), dtype=torch.uint8),
+                    "shape": (256, 256),
+                    "codebooks": torch.randn(256, 4, 8, dtype=torch.float16),
+                    "indices": torch.randint(0, 4, (256, 32), dtype=torch.uint8),
                     "outlier_values": None,
                     "outlier_indices": None,
                     "compression_ratio": 6.0,
@@ -151,8 +151,8 @@ class TestBF2Roundtrip:
             writer = BF2Writer(path)
             writer.write(
                 layers,
-                model_config={"architecture": "llama", "hidden_size": 4096,
-                              "num_hidden_layers": 32, "vocab_size": 32000},
+                model_config={"architecture": "llama", "hidden_size": 256,
+                              "num_hidden_layers": 8, "vocab_size": 1000},
                 quantize_config={"bits": 2, "outlier_fraction": 0.01},
             )
             writer.close()

@@ -141,7 +141,7 @@ class VectorQuantizer:
             "bits": self.config.bits,
             "sub_vector_size": self.config.sub_vector_size,
             "outlier_fraction": self.config.outlier_fraction,
-            "opacc1ty_version": "0.1.0",
+            "opacc1ty_version": "1.0.2",
         }
 
         return results

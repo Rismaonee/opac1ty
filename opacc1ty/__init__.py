@@ -18,7 +18,7 @@ from opacc1ty.quantize.outlier import OutlierDetector
 from opacc1ty.format.bf2 import BF2Writer, BF2Reader
 from opacc1ty.format.header import BF2Header, LayerFormat
 
-__version__ = "0.1.0"
+__version__ = "1.0.2"
 __all__ = [
     "VectorQuantizer",
     "CodebookLearner",

@@ -202,9 +202,10 @@ class BF2Reader:
 
             # Compute next layer position
             if fmt.layer_type == LayerType.QUANTIZED:
+                indices_per_row = fmt.in_features // fmt.sub_vector_size
                 layer_data_size = (
                     fmt.n_groups * fmt.codebook_entries * fmt.sub_vector_size * 2
-                    + fmt.n_groups * fmt.sub_vector_size  # indices (uint8)
+                    + fmt.n_groups * indices_per_row  # indices (uint8)
                 )
                 if fmt.n_outliers > 0:
                     layer_data_size += fmt.n_outliers * fmt.in_features * 2  # values
@@ -249,7 +250,8 @@ class BF2Reader:
 
         if fmt.layer_type == LayerType.QUANTIZED:
             cb_bytes = fmt.n_groups * fmt.codebook_entries * fmt.sub_vector_size * 2
-            idx_bytes = fmt.n_groups * fmt.sub_vector_size
+            indices_per_row = fmt.in_features // fmt.sub_vector_size
+            idx_bytes = fmt.n_groups * indices_per_row
 
             codebooks = torch.frombuffer(
                 bytearray(self.file.read(cb_bytes)),
@@ -259,7 +261,7 @@ class BF2Reader:
             indices = torch.frombuffer(
                 bytearray(self.file.read(idx_bytes)),
                 dtype=torch.uint8,
-            ).reshape(fmt.n_groups, fmt.sub_vector_size)
+            ).reshape(fmt.n_groups, indices_per_row)
 
             result = {
                 "type": "quantized",
@@ -309,10 +311,11 @@ class BF2Reader:
 
             fmt = LayerFormat.unpack(header_data)
             if fmt.layer_type == LayerType.QUANTIZED:
+                indices_per_row = fmt.in_features // fmt.sub_vector_size
                 pos += (
                     HEADER_SIZE + name_len
                     + fmt.n_groups * fmt.codebook_entries * fmt.sub_vector_size * 2
-                    + fmt.n_groups * fmt.sub_vector_size
+                    + fmt.n_groups * indices_per_row
                 )
                 if fmt.n_outliers > 0:
                     pos += fmt.n_outliers * fmt.in_features * 2 + fmt.n_outliers * 4

@@ -44,13 +44,14 @@ from safetensors.torch import save_file
 from opacc1ty.quantize.vq import VectorQuantizer, QuantizeConfig
 from opacc1ty.quantize.outlier import OutlierDetector, OutlierConfig
 from opacc1ty.format.bf2 import BF2Writer, BF2Reader
+from opacc1ty.export.converter import convert_bf2_to_gguf
 from opacc1ty.utils.metal_utils import get_metal_device_info
 
 console = Console()
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="opacc1ty")
+@click.version_option(version="1.0.2", prog_name="opacc1ty")
 def cli():
     """Opacc1ty — 2-bit quantization for Apple Silicon LLM inference.
 
@@ -317,22 +318,58 @@ def benchmark(bf2_path: str, prompt: str, max_tokens: int, baseline: bool):
 
 @cli.command()
 @click.argument("bf2_path", type=click.Path(exists=True))
-@click.option("--format", "-f", "fmt", type=click.Choice(["gguf", "mlx"]),
-              default="gguf", help="Export format (default: gguf)")
+@click.option("--format", "-f", "fmt", type=click.Choice(["Q2_K", "Q3_K", "Q4_K"]),
+              default="Q4_K", help="GGUF quant format (default: Q4_K). Q2_K=smallest/fastest, Q4_K=best quality")
 @click.option("--output", "-o", type=click.Path(), default=None,
-              help="Output file path")
+              help="Output file path (default: same name, .gguf)")
 def export(bf2_path: str, fmt: str, output: Optional[str]):
-    """Export a BF2 model to GGUF or MLX format for use with other engines."""
-    console.print(f"[bold]Exporting {bf2_path} to {fmt}...[/]")
+    """Export an opacc1ty .bf2 model to GGUF for llama.cpp.
 
-    # Stub — actual export requires format-specific serialization
-    console.print("[yellow]Export is a planned feature. GGUF/MLX format "
-                  "specs for 2-bit codebook-based weights are being defined.")
-    console.print("For now, use the BF2 format directly with the Opacc1ty "
-                  "Metal runtime.\n")
+    \b
+    Dequantizes the 2-bit codebook weights, requantizes to GGML K-Quant
+    format, and writes a llama.cpp-compatible GGUF file. No patches needed —
+    drop the .gguf into llama.cpp and run.
 
-    console.print("[dim]To contribute format support: "
-                  "https://github.com/Rismaonee/opacc1ty[/]")
+    \b
+    Quality/speed tradeoffs:
+      Q2_K — smallest file, fastest, most quality loss
+      Q3_K — balanced (recommended for opacc1ty source)
+      Q4_K — best quality, larger file
+
+    \b
+    Examples:
+      opacc1ty export model.bf2 --format Q3_K
+      opacc1ty export model.bf2 -o ~/models/llama-7b.gguf
+    """
+    start_time = time.time()
+    console.print(f"[bold]Exporting[/] {bf2_path} → GGUF/{fmt}")
+
+    try:
+        gguf_path = convert_bf2_to_gguf(
+            bf2_path,
+            gguf_path=output,
+            quant_format=fmt,
+            progress=True,
+        )
+
+        elapsed = time.time() - start_time
+        file_size = Path(gguf_path).stat().st_size / 1e9
+
+        table = Table(title="Export Complete")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("Format", f"GGUF {fmt}")
+        table.add_row("File size", f"{file_size:.2f} GB")
+        table.add_row("Time", f"{elapsed:.1f}s")
+        table.add_row("Output", gguf_path)
+        console.print(table)
+
+        console.print("\n[bold green]✓[/] Drop this into llama.cpp and run:")
+        console.print(f"  [dim]./llama-cli -m {gguf_path} -p \"Hello\"[/]")
+
+    except Exception as e:
+        console.print(f"[red]Export failed:[/] {e}")
+        raise
 
 
 @cli.command()

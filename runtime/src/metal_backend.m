@@ -1,5 +1,5 @@
 /**
- * metal_backend.m — Metal GPU backend for Opac1ty inference.
+ * metal_backend.m — Metal GPU backend for Opacc1ty inference.
  *
  * This is the performance-critical Objective-C implementation that:
  * 1. Compiles the Metal shaders at runtime (or loads precompiled .metallib)
@@ -21,7 +21,7 @@
 #import <Metal/Metal.h>
 #import <dlfcn.h>
 
-#include "opac1ty.h"
+#include "opacc1ty.h"
 
 /* ================================================================
  * Metal context
@@ -73,12 +73,12 @@ MetalContext *metal_backend_init(BFEngine *engine) {
     /* Get default Metal device (Apple Silicon GPU) */
     ctx->device = MTLCreateSystemDefaultDevice();
     if (!ctx->device) {
-        fprintf(stderr, "Opac1ty: No Metal device found\n");
+        fprintf(stderr, "Opacc1ty: No Metal device found\n");
         free(ctx);
         return NULL;
     }
 
-    NSLog(@"Opac1ty Metal backend: %@", ctx->device.name);
+    NSLog(@"Opacc1ty Metal backend: %@", ctx->device.name);
 
     ctx->command_queue = [ctx->device newCommandQueue];
     ctx->max_threads_per_threadgroup =
@@ -89,7 +89,7 @@ MetalContext *metal_backend_init(BFEngine *engine) {
     /* Load pre-compiled Metallib */
     NSError *error = nil;
 
-    /* Look for opac1ty.metallib next to the executable */
+    /* Look for opacc1ty.metallib next to the executable */
     NSString *exePath = [[NSBundle mainBundle] executablePath];
     if (!exePath) {
         /* Not in a bundle — look in standard locations */
@@ -99,17 +99,17 @@ MetalContext *metal_backend_init(BFEngine *engine) {
     NSString *metallibDir = [[exePath stringByDeletingLastPathComponent]
                               stringByDeletingLastPathComponent];
     NSString *metallibPath = [metallibDir
-        stringByAppendingPathComponent:@"kernels/opac1ty.metallib"];
+        stringByAppendingPathComponent:@"kernels/opacc1ty.metallib"];
 
     /* Also try current directory */
     NSFileManager *fm = [NSFileManager defaultManager];
     if (![fm fileExistsAtPath:metallibPath]) {
-        metallibPath = @"kernels/opac1ty.metallib";
+        metallibPath = @"kernels/opacc1ty.metallib";
     }
 
     ctx->library = [ctx->device newLibraryWithFile:metallibPath error:&error];
     if (!ctx->library) {
-        NSLog(@"Opac1ty: Failed to load metallib: %@", error);
+        NSLog(@"Opacc1ty: Failed to load metallib: %@", error);
 
         /* Attempt runtime compilation from source */
         NSString *kernelPath = @"kernels/dequant_gemv.metal";
@@ -125,7 +125,7 @@ MetalContext *metal_backend_init(BFEngine *engine) {
         }
 
         if (!ctx->library) {
-            NSLog(@"Opac1ty: Cannot compile Metal shaders: %@", error);
+            NSLog(@"Opacc1ty: Cannot compile Metal shaders: %@", error);
             free(ctx);
             return NULL;
         }
@@ -154,7 +154,7 @@ MetalContext *metal_backend_init(BFEngine *engine) {
             newComputePipelineStateWithFunction:gemm_func error:&error];
     }
 
-    NSLog(@"Opac1ty: Loaded %d compute pipelines",
+    NSLog(@"Opacc1ty: Loaded %d compute pipelines",
           (ctx->gemv_pipeline ? 1 : 0) +
           (ctx->gemm_pipeline ? 1 : 0));
 
@@ -188,7 +188,7 @@ MetalContext *metal_backend_init(BFEngine *engine) {
 
     engine->kv_cache_size = kv_size * 2;
 
-    NSLog(@"Opac1ty: KV cache allocated (%lu MB for %u layers, %u seq)",
+    NSLog(@"Opacc1ty: KV cache allocated (%lu MB for %u layers, %u seq)",
           (unsigned long)(kv_size * 2 / (1024 * 1024)),
           n_layers, max_seq);
 

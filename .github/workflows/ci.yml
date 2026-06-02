@@ -47,8 +47,8 @@ jobs:
 
       - name: Verify build
         run: |
-          ls -la runtime/build/libopac1ty.dylib
-          file runtime/build/libopac1ty.dylib
+          ls -la runtime/build/libopacc1ty.dylib
+          file runtime/build/libopacc1ty.dylib
 
   lint:
     name: Lint
@@ -67,7 +67,7 @@ jobs:
 
       - name: Lint Python
         run: |
-          ruff check opac1ty/ tests/
+          ruff check opacc1ty/ tests/
 
       - name: Check Metal shader syntax
         run: |

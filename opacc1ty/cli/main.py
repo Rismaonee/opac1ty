@@ -1,28 +1,28 @@
 """
-Opac1ty CLI — command-line interface for 2-bit model quantization and inference.
+Opacc1ty CLI — command-line interface for 2-bit model quantization and inference.
 
 Commands:
-    opac1ty quantize   Compress a model to 2-bit BF2 format
-    opac1ty info       Show information about a BF2 file
-    opac1ty benchmark  Benchmark inference speed (fp16 vs 2-bit)
-    opac1ty export     Export a BF2 model to GGUF or MLX format
-    opac1ty serve      Start a local inference server (OpenAI-compatible)
+    opacc1ty quantize   Compress a model to 2-bit BF2 format
+    opacc1ty info       Show information about a BF2 file
+    opacc1ty benchmark  Benchmark inference speed (fp16 vs 2-bit)
+    opacc1ty export     Export a BF2 model to GGUF or MLX format
+    opacc1ty serve      Start a local inference server (OpenAI-compatible)
 
 Examples:
     # Quantize a safetensors model
-    opac1ty quantize model.safetensors --bits 2 --output model.bf2
+    opacc1ty quantize model.safetensors --bits 2 --output model.bf2
 
     # Show compression stats
-    opac1ty info model.bf2
+    opacc1ty info model.bf2
 
     # Benchmark speedup
-    opac1ty benchmark model.bf2 --prompt "Hello, world" --max-tokens 256
+    opacc1ty benchmark model.bf2 --prompt "Hello, world" --max-tokens 256
 
     # Export for use with llama.cpp
-    opac1ty export model.bf2 --format gguf --output model-q2.gguf
+    opacc1ty export model.bf2 --format gguf --output model-q2.gguf
 
     # Serve via OpenAI-compatible API
-    opac1ty serve model.bf2 --port 8080
+    opacc1ty serve model.bf2 --port 8080
 """
 
 import sys
@@ -41,18 +41,18 @@ from rich.panel import Panel
 from safetensors import safe_open
 from safetensors.torch import save_file
 
-from opac1ty.quantize.vq import VectorQuantizer, QuantizeConfig
-from opac1ty.quantize.outlier import OutlierDetector, OutlierConfig
-from opac1ty.format.bf2 import BF2Writer, BF2Reader
-from opac1ty.utils.metal_utils import get_metal_device_info
+from opacc1ty.quantize.vq import VectorQuantizer, QuantizeConfig
+from opacc1ty.quantize.outlier import OutlierDetector, OutlierConfig
+from opacc1ty.format.bf2 import BF2Writer, BF2Reader
+from opacc1ty.utils.metal_utils import get_metal_device_info
 
 console = Console()
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="opac1ty")
+@click.version_option(version="0.1.0", prog_name="opacc1ty")
 def cli():
-    """Opac1ty — 2-bit quantization for Apple Silicon LLM inference.
+    """Opacc1ty — 2-bit quantization for Apple Silicon LLM inference.
 
     Compress models to 2 bits/weight with fused Metal dequant kernels.
     Achieves up to 8× faster generation vs. fp16 inference.
@@ -94,8 +94,8 @@ def quantize(
 
     \b
     Examples:
-        opac1ty quantize llama-7b/ --output llama-7b-q2.bf2
-        opac1ty quantize model.safetensors --bits 2 --outlier-fraction 0.02
+        opacc1ty quantize llama-7b/ --output llama-7b-q2.bf2
+        opacc1ty quantize model.safetensors --bits 2 --outlier-fraction 0.02
     """
     model_path = Path(model_path)
     if output is None:
@@ -227,7 +227,7 @@ def info(bf2_path: str, layers: bool, json_output: bool):
               help="Also benchmark uncompressed fp16 model for comparison")
 def benchmark(bf2_path: str, prompt: str, max_tokens: int, baseline: bool):
     """Benchmark inference speed of a BF2 quantized model."""
-    console.print("[bold]Opac1ty Benchmark[/]\n")
+    console.print("[bold]Opacc1ty Benchmark[/]\n")
 
     # Check Metal availability
     gpu_info = get_metal_device_info()
@@ -286,7 +286,7 @@ def benchmark(bf2_path: str, prompt: str, max_tokens: int, baseline: bool):
     table = Table(title="Estimated Performance")
     table.add_column("Metric", style="cyan")
     table.add_column("fp16", style="yellow")
-    table.add_column("Opac1ty 2-bit", style="green")
+    table.add_column("Opacc1ty 2-bit", style="green")
     table.add_column("Speedup", style="bold magenta")
 
     table.add_row(
@@ -328,11 +328,11 @@ def export(bf2_path: str, fmt: str, output: Optional[str]):
     # Stub — actual export requires format-specific serialization
     console.print("[yellow]Export is a planned feature. GGUF/MLX format "
                   "specs for 2-bit codebook-based weights are being defined.")
-    console.print("For now, use the BF2 format directly with the Opac1ty "
+    console.print("For now, use the BF2 format directly with the Opacc1ty "
                   "Metal runtime.\n")
 
     console.print("[dim]To contribute format support: "
-                  "https://github.com/Rismaonee/opac1ty[/]")
+                  "https://github.com/Rismaonee/opacc1ty[/]")
 
 
 @cli.command()
@@ -342,15 +342,15 @@ def export(bf2_path: str, fmt: str, output: Optional[str]):
 def serve(bf2_path: str, port: int, host: str):
     """Start an OpenAI-compatible inference server."""
     console.print(Panel.fit(
-        f"[bold]Opac1ty Server[/]\n\n"
+        f"[bold]Opacc1ty Server[/]\n\n"
         f"Model: {bf2_path}\n"
         f"Endpoint: http://{host}:{port}/v1/chat/completions\n\n"
         f"Example:\n"
         f"  curl http://{host}:{port}/v1/chat/completions \\\n"
         f"    -H 'Content-Type: application/json' \\\n"
-        f"    -d '{{\"model\": \"opac1ty\", \"messages\": [{{\"role\": \"user\", "
+        f"    -d '{{\"model\": \"opacc1ty\", \"messages\": [{{\"role\": \"user\", "
         f"\"content\": \"Hello!\"}}]}}'",
-        title="🚀 Opac1ty Server"
+        title="🚀 Opacc1ty Server"
     ))
     console.print("[yellow]Server implementation requires the Metal runtime. "
                   "Coming in v0.2.0.[/]\n")

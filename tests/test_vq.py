@@ -2,8 +2,8 @@
 
 import torch
 import pytest
-from opac1ty.quantize.vq import VectorQuantizer, QuantizeConfig
-from opac1ty.quantize.outlier import OutlierDetector, OutlierConfig
+from opacc1ty.quantize.vq import VectorQuantizer, QuantizeConfig
+from opacc1ty.quantize.outlier import OutlierDetector, OutlierConfig
 
 
 class TestVectorQuantizer:

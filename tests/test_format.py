@@ -4,8 +4,8 @@ import torch
 import pytest
 import tempfile
 from pathlib import Path
-from opac1ty.format.header import BF2Header, LayerFormat, LayerType, MAGIC, VERSION
-from opac1ty.format.bf2 import BF2Writer, BF2Reader
+from opacc1ty.format.header import BF2Header, LayerFormat, LayerType, MAGIC, VERSION
+from opacc1ty.format.bf2 import BF2Writer, BF2Reader
 
 
 class TestLayerFormat:

@@ -1,5 +1,5 @@
 /**
- * opac1ty.h — C API for Opac1ty 2-bit quantized inference on Apple Silicon.
+ * opacc1ty.h — C API for Opacc1ty 2-bit quantized inference on Apple Silicon.
  *
  * This header provides a minimal, high-performance C interface for loading
  * .bf2 quantized models and running inference via fused Metal dequant kernels.
@@ -11,15 +11,15 @@
  *   - Embeddable: single .dylib, easy to link into any project.
  *
  * Example:
- *     #include "opac1ty.h"
+ *     #include "opacc1ty.h"
  *
  *     BFEngine *engine = bf_engine_create("model.bf2");
  *     bf_engine_generate(engine, "Hello, world!", 128, stdout);
  *     bf_engine_destroy(engine);
  */
 
-#ifndef OPAC1TY_H
-#define OPAC1TY_H
+#ifndef OPACC1TY_H
+#define OPACC1TY_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -67,12 +67,12 @@ typedef struct {
 extern const BFSamplingParams BF_DEFAULT_SAMPLING;
 
 /**
- * Create a Opac1ty inference engine from a .bf2 file.
+ * Create a Opacc1ty inference engine from a .bf2 file.
  *
  * Loads the quantized model weights via mmap, compiles the Metal compute
  * pipeline, and allocates KV cache buffers. Returns NULL on error.
  *
- * @param path  Path to a .bf2 file produced by `opac1ty quantize`.
+ * @param path  Path to a .bf2 file produced by `opacc1ty quantize`.
  * @return      Engine handle, or NULL on error. Free with bf_engine_destroy().
  */
 BFEngine *bf_engine_create(const char *path);
@@ -200,7 +200,7 @@ void bf_engine_get_stats(const BFEngine *engine, BFStats *stats);
 void bf_engine_reset_stats(BFEngine *engine);
 
 /**
- * Get the version string of the Opac1ty runtime.
+ * Get the version string of the Opacc1ty runtime.
  */
 const char *bf_version(void);
 
@@ -215,4 +215,4 @@ int bf_has_metal_gpu(void);
 }
 #endif
 
-#endif /* OPAC1TY_H */
+#endif /* OPACC1TY_H */

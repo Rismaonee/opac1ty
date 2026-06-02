@@ -1,5 +1,5 @@
 /**
- * simple_inference.c — Minimal Opac1ty inference example.
+ * simple_inference.c — Minimal Opacc1ty inference example.
  *
  * Demonstrates the complete flow: load a .bf2 quantized model,
  * generate text from a prompt, and display performance stats.
@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "opac1ty.h"
+#include "opacc1ty.h"
 
 int main(int argc, char **argv) {
     const char *model_path = "model.bf2";
@@ -24,12 +24,12 @@ int main(int argc, char **argv) {
     if (argc >= 3) prompt = argv[2];
     if (argc >= 4) max_tokens = (uint32_t)atoi(argv[3]);
 
-    printf("=== Opac1ty Inference Engine v%s ===\n\n", bf_version());
+    printf("=== Opacc1ty Inference Engine v%s ===\n\n", bf_version());
 
     /* Check GPU availability */
     if (!bf_has_metal_gpu()) {
         printf("Warning: No Apple Silicon GPU detected.\n");
-        printf("Opac1ty requires an M-series Mac for full performance.\n\n");
+        printf("Opacc1ty requires an M-series Mac for full performance.\n\n");
     } else {
         printf("Apple Silicon GPU detected.\n\n");
     }

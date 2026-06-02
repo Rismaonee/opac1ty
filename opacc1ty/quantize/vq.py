@@ -27,8 +27,8 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from tqdm import tqdm
 
-from opac1ty.quantize.codebook import CodebookLearner, CodebookConfig
-from opac1ty.quantize.outlier import OutlierDetector, OutlierConfig
+from opacc1ty.quantize.codebook import CodebookLearner, CodebookConfig
+from opacc1ty.quantize.outlier import OutlierDetector, OutlierConfig
 
 
 @dataclass
@@ -141,7 +141,7 @@ class VectorQuantizer:
             "bits": self.config.bits,
             "sub_vector_size": self.config.sub_vector_size,
             "outlier_fraction": self.config.outlier_fraction,
-            "opac1ty_version": "0.1.0",
+            "opacc1ty_version": "0.1.0",
         }
 
         return results

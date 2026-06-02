@@ -1,1 +1,1 @@
-"""Opac1ty test suite."""
+"""Opacc1ty test suite."""

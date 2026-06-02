@@ -1,12 +1,12 @@
 /**
- * inference.c — Autoregressive inference loop for Opac1ty.
+ * inference.c — Autoregressive inference loop for Opacc1ty.
  *
  * Implements the token generation loop with KV cache management.
  * Handles tokenization stubs, sampling (temperature, top-p, top-k),
  * and the prefill/decode separation.
  */
 
-#include "opac1ty.h"
+#include "opacc1ty.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>

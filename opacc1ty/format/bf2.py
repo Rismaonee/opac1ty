@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, BinaryIO, Optional
 from tqdm import tqdm
 
-from opac1ty.format.header import (
+from opacc1ty.format.header import (
     MAGIC, VERSION, HEADER_SIZE,
     BF2Header, LayerFormat, LayerType,
 )

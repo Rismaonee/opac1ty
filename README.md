@@ -1,8 +1,8 @@
-# Opac1ty
+# Opacc1ty
 
 Local LLMs on Apple Silicon are slow. Not because the GPU is weak — the M3 Max has 400 GB/s of memory bandwidth and ~14 teraflops of compute. The problem is that **every single token has to drag 14 GB of fp16 weights through the bus**. The GPU spends most of its time waiting on memory.
 
-Opac1ty fixes this by crushing the weights down to 2 bits — not with naive rounding, but with learned per-channel codebooks via k-means. Then instead of decompressing to fp16 and doing a separate matmul, **the dequant and matmul are fused into one Metal kernel**. The weights never expand in memory. They stay 2-bit all the way from RAM to register.
+Opacc1ty fixes this by crushing the weights down to 2 bits — not with naive rounding, but with learned per-channel codebooks via k-means. Then instead of decompressing to fp16 and doing a separate matmul, **the dequant and matmul are fused into one Metal kernel**. The weights never expand in memory. They stay 2-bit all the way from RAM to register.
 
 On my M3 Max, Llama-3.1-8B goes from ~28 tok/s to ~195 tok/s. That's about **7× faster** just by changing how the weights are stored and computed. No model surgery. No distillation. Same architecture.
 
@@ -18,7 +18,7 @@ Normal quantization pipelines do this:
 
 The expansion step blows 2-bit data back up to 16-bit before the GPU ever sees it. You save disk space but you don't save bandwidth — and bandwidth is what limits generation speed.
 
-Opac1ty does this instead:
+Opacc1ty does this instead:
 
 ```
 2-bit weights + tiny codebook → feed straight into GPU → lookup + matmul in registers
@@ -39,8 +39,8 @@ Yeah, mostly. Here's what I get on an M3 Max with 64 GB:
 | fp16 (MLX) | 14.0 GB | 28 | 6.14 |
 | Q4_K_M (llama.cpp) | 4.9 GB | 68 | 6.21 |
 | Q3_K_M (llama.cpp) | 3.8 GB | 85 | 6.35 |
-| **Opac1ty 2-bit, 1% outliers** | **2.5 GB** | **180** | **6.32** |
-| Opac1ty 2-bit, 2% outliers | 2.8 GB | 165 | 6.25 |
+| **Opacc1ty 2-bit, 1% outliers** | **2.5 GB** | **180** | **6.32** |
+| Opacc1ty 2-bit, 2% outliers | 2.8 GB | 165 | 6.25 |
 
 The 2-bit quant loses about 0.18 perplexity vs fp16. That's roughly on par with a good 3-bit uniform quant — except it's 2× faster because less data moves through the bus. If you push outlier fraction to 2% it drops to +0.11 perplexity at the cost of some speed.
 
@@ -51,7 +51,7 @@ Is it perfect? No. Very small models (<3B params) lose more quality because ther
 ## Install
 
 ```bash
-pip install opac1ty
+pip install opacc1ty
 ```
 
 You need:
@@ -69,7 +69,7 @@ Right now this only works on Apple Silicon. If someone wants to port the fused k
 Quantize a HuggingFace model:
 
 ```bash
-opac1ty quantize ~/models/llama-3.1-8b/ --output llama.bf2
+opacc1ty quantize ~/models/llama-3.1-8b/ --output llama.bf2
 ```
 
 This takes about 15 minutes on CPU for an 8B model, or ~5 minutes if you use MPS (`--device mps`). It'll spit out a `.bf2` file.
@@ -77,20 +77,20 @@ This takes about 15 minutes on CPU for an 8B model, or ~5 minutes if you use MPS
 See what you got:
 
 ```bash
-opac1ty info llama.bf2 --layers
+opacc1ty info llama.bf2 --layers
 ```
 
 Benchmark it:
 
 ```bash
-opac1ty benchmark llama.bf2 --prompt "Write a quicksort in Rust" --max-tokens 256
+opacc1ty benchmark llama.bf2 --prompt "Write a quicksort in Rust" --max-tokens 256
 ```
 
 Or from Python:
 
 ```python
-from opac1ty import VectorQuantizer, QuantizeConfig
-from opac1ty.format.bf2 import BF2Writer
+from opacc1ty import VectorQuantizer, QuantizeConfig
+from opacc1ty.format.bf2 import BF2Writer
 from safetensors import safe_open
 
 state_dict = {}
@@ -111,8 +111,8 @@ There's also a C API if you want to embed this in something — check `runtime/`
 ## Files
 
 ```
-opac1ty/
-├── opac1ty/          # python package
+opacc1ty/
+├── opacc1ty/          # python package
 │   ├── quantize/     #   vq, k-means codebook learner, outlier detection
 │   ├── format/       #   .bf2 binary format reader/writer
 │   ├── cli/          #   quantize, info, benchmark, serve commands

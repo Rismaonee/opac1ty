@@ -1,5 +1,5 @@
 """
-Metal kernel management utilities for Opac1ty.
+Metal kernel management utilities for Opacc1ty.
 
 Handles:
 - Compiling Metal shader source to Metallib at import time
@@ -77,7 +77,7 @@ def get_metal_device_info() -> Optional[GPUInfo]:
 
 
 class MetalKernelManager:
-    """Manages Metal compute pipeline for Opac1ty inference.
+    """Manages Metal compute pipeline for Opacc1ty inference.
 
     Compiles .metal shader files into a Metallib, manages Metal device
     and command queue, and provides methods to dispatch the fused

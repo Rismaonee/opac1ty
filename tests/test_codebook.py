@@ -2,7 +2,7 @@
 
 import torch
 import pytest
-from opac1ty.quantize.codebook import CodebookLearner, CodebookConfig
+from opacc1ty.quantize.codebook import CodebookLearner, CodebookConfig
 
 
 class TestCodebookLearner:

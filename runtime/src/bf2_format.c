@@ -5,13 +5,13 @@
  * Handles the three layer types (quantized, sparse_outlier, fp16_pass-through)
  * and provides zero-copy access to codebooks, indices, and outlier data.
  *
- * File format (see opac1ty/format/header.py for full spec):
+ * File format (see opacc1ty/format/header.py for full spec):
  *   [Magic:4] [Version:4] [Flags:4] [ModelJSONLen:4]
  *   [ModelJSON:N] [QuantConfigJSONLen:4] [QuantConfigJSON:M]
  *   [LayerCount:4] [LayerHeaders...] [LayerData...] [Checksum:8]
  */
 
-#include "opac1ty.h"
+#include "opacc1ty.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

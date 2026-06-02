@@ -1,6 +1,6 @@
 // dequant_gemv.metal — Fused 2-bit dequantization + GEMV for Apple Silicon
 //
-// This kernel is the core innovation of Opac1ty. Instead of:
+// This kernel is the core innovation of Opacc1ty. Instead of:
 //   1. Load 2-bit indices from memory
 //   2. Lookup fp16 values from codebook
 //   3. Store expanded fp16 weights to memory

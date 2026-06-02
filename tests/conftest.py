@@ -1,4 +1,4 @@
-"""Pytest configuration for Opac1ty tests."""
+"""Pytest configuration for Opacc1ty tests."""
 
 import pytest
 import torch

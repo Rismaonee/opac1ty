@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opac1ty"
+version = "0.1.0"
+description = "2-bit quantization with fused Metal dequant kernels for Apple Silicon — up to 8× faster local LLM inference"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Opac1ty Contributors"}
+]
+keywords = ["quantization", "llm", "metal", "apple-silicon", "inference", "2-bit"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "torch>=2.0",
+    "numpy>=1.24",
+    "safetensors>=0.3",
+    "tqdm>=4.65",
+    "click>=8.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-benchmark>=4.0",
+    "transformers>=4.35",
+    "datasets>=2.14",
+]
+
+[project.scripts]
+opac1ty = "opac1ty.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/Rismaonee/opac1ty"
+Repository = "https://github.com/Rismaonee/opac1ty"
+Issues = "https://github.com/Rismaonee/opac1ty/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["opac1ty*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

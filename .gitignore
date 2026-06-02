@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+.conda/
+
+# Compiled Metal shaders
+*.metallib
+*.air
+*.metalar
+
+# BF2 model files
+*.bf2
+
+# C build
+runtime/build/
+*.o
+*.dylib
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+*.prof
+
+# Temporary files
+tmp/
+*.tmp

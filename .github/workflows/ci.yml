@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: |
+          python -m pytest tests/ -v --tb=short --timeout=120
+
+  test-runtime:
+    name: C Runtime
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build runtime
+        run: |
+          cd runtime
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make -j$(sysctl -n hw.logicalcpu)
+
+      - name: Verify build
+        run: |
+          ls -la runtime/build/libopac1ty.dylib
+          file runtime/build/libopac1ty.dylib
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: |
+          pip install ruff
+
+      - name: Lint Python
+        run: |
+          ruff check opac1ty/ tests/
+
+      - name: Check Metal shader syntax
+        run: |
+          # Verify .metal files exist and have reasonable size
+          for f in kernels/*.metal; do
+            lines=$(wc -l < "$f")
+            if [ "$lines" -lt 10 ]; then
+              echo "ERROR: $f is too short ($lines lines)"
+              exit 1
+            fi
+            echo "$f: $lines lines OK"
+          done

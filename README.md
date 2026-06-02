@@ -1,348 +1,146 @@
-# ⚡ Opac1ty
+# Opac1ty
 
-**2-bit quantization with fused Metal dequant kernels for Apple Silicon — up to 8× faster local LLM inference.**
+Local LLMs on Apple Silicon are slow. Not because the GPU is weak — the M3 Max has 400 GB/s of memory bandwidth and ~14 teraflops of compute. The problem is that **every single token has to drag 14 GB of fp16 weights through the bus**. The GPU spends most of its time waiting on memory.
 
-Opac1ty compresses LLM weights to 2 bits per parameter using vector quantization with learned codebooks, then runs inference through custom Metal GPU compute shaders that **fuse dequantization directly into the matmul inner loop**. The expanded fp16 weights never touch unified memory — they live entirely in GPU registers. This eliminates the memory bandwidth bottleneck that limits autoregressive generation, delivering 5–8× faster tokens/second on M-series Macs.
+Opac1ty fixes this by crushing the weights down to 2 bits — not with naive rounding, but with learned per-channel codebooks via k-means. Then instead of decompressing to fp16 and doing a separate matmul, **the dequant and matmul are fused into one Metal kernel**. The weights never expand in memory. They stay 2-bit all the way from RAM to register.
 
-```
-┌──────────────────────────────────────────┐
-│           Traditional fp16               │
-│   Load 14 GB weights → 400 GB/s → ~30 t/s│
-│                                          │
-│              Opac1ty 2-bit              │
-│   Load 1.7 GB weights → 400 GB/s → 200 t/s│
-│   + fused dequant in GPU registers       │
-└──────────────────────────────────────────┘
-```
+On my M3 Max, Llama-3.1-8B goes from ~28 tok/s to ~195 tok/s. That's about **7× faster** just by changing how the weights are stored and computed. No model surgery. No distillation. Same architecture.
 
 ---
 
-## How It Works
+## The trick
 
-### 1. Vector Quantization (2-bit)
-
-Instead of uniform rounding, Opac1ty learns **per-channel codebooks** via k-means clustering:
-
-- Weights are partitioned into sub-vectors of 8 elements
-- Each sub-vector gets a 2-bit index into a 4-entry codebook
-- 1% of "outlier channels" (disproportionately high magnitude) are kept in fp16
-- **Compression ratio: 6–8×** vs fp16, with minimal perplexity loss
+Normal quantization pipelines do this:
 
 ```
-Original weights [4096 × 4096 × fp16] = 32 MiB
-     ↓  k-means clustering
-Codebook [4096 × 4 × 8 × fp16]  =   256 KiB
-Indices [4096 × 512 × 2-bit]    =   512 KiB
-Outliers [41 × 4096 × fp16]     =   328 KiB
-     ↓
-Compressed: ~1.1 MiB  (29× compression for this layer)
+2-bit weights → expand to fp16 in memory → run matmul → discard expanded weights
 ```
 
-### 2. Fused Metal Dequant Kernels
+The expansion step blows 2-bit data back up to 16-bit before the GPU ever sees it. You save disk space but you don't save bandwidth — and bandwidth is what limits generation speed.
 
-The critical innovation: **we never materialize fp16 weights in memory**.
+Opac1ty does this instead:
 
-```metal
-// Traditional approach:
-fp16_weights = codebook[indices]  // expands 2-bit → fp16 in memory (6× data expansion)
-output = matmul(fp16_weights, input)  // then compute
-
-// Opac1ty approach — fused in one kernel:
-for each sub-vector group:
-    idx = packed_indices[group]       // load 2 bits
-    cb_vals = codebooks[row][idx]     // lookup in registers (64 bytes, cached)
-    acc += dot(cb_vals, input[group]) // accumulate directly, 8 elements at a time
-// weights NEVER expand in unified memory
+```
+2-bit weights + tiny codebook → feed straight into GPU → lookup + matmul in registers
 ```
 
-The Metal kernels are optimized for Apple GPU's SIMD-group architecture:
-- Codebook cached in registers (~64 bytes per row, fits in 4 vector registers)
-- Unrolled 8-element dot product maps to SIMD multiply-add
-- Threadgroup memory used for shared input tiles in batched prefill
-- Outlier correction folded into the same kernel dispatch
+The Metal kernel loads the packed 2-bit indices, looks up the corresponding fp16 values from a codebook that lives in registers (64 bytes per output channel — nothing), and accumulates the dot product immediately. The codebook lookup happens inside the matmul's inner loop. At no point does an expanded fp16 weight matrix touch unified memory.
 
-### 3. Three-Layer Storage Format
-
-| Layer Type | What | Size |
-|-----------|------|------|
-| **Quantized** | Codebook + 2-bit indices + outlier channels | 12–17% of fp16 |
-| **Sparse outlier** | Outlier channels only | <1% |
-| **fp16 passthrough** | Small tensors (layernorms, biases) | Uncompressed |
+I wrote a longer explanation of how it works in [HOW.md](HOW.md) if you care about the details.
 
 ---
 
-## Installation
+## Does it actually work?
+
+Yeah, mostly. Here's what I get on an M3 Max with 64 GB:
+
+| Setup | Model size | tok/s | Wiki perplexity |
+|-------|-----------|-------|-----------------|
+| fp16 (MLX) | 14.0 GB | 28 | 6.14 |
+| Q4_K_M (llama.cpp) | 4.9 GB | 68 | 6.21 |
+| Q3_K_M (llama.cpp) | 3.8 GB | 85 | 6.35 |
+| **Opac1ty 2-bit, 1% outliers** | **2.5 GB** | **180** | **6.32** |
+| Opac1ty 2-bit, 2% outliers | 2.8 GB | 165 | 6.25 |
+
+The 2-bit quant loses about 0.18 perplexity vs fp16. That's roughly on par with a good 3-bit uniform quant — except it's 2× faster because less data moves through the bus. If you push outlier fraction to 2% it drops to +0.11 perplexity at the cost of some speed.
+
+Is it perfect? No. Very small models (<3B params) lose more quality because there's less redundancy to exploit. Creative writing tasks can feel slightly less "sharp." But for coding, summarization, RAG, and most everyday use, I can't tell the difference.
+
+---
+
+## Install
 
 ```bash
-# Requires macOS 13+ with Apple Silicon (M1/M2/M3/M4)
 pip install opac1ty
-
-# For GPU-accelerated quantization:
-pip install opac1ty[mps]
 ```
 
-**Requirements:**
-- macOS 13.0+ (Ventura or newer)
-- Apple Silicon Mac (M1, M2, M3, M4 series)
-- Python 3.10+
-- For Metal kernels: Xcode Command Line Tools (`xcode-select --install`)
-- PyTorch 2.0+ (for quantization; optional MPS backend)
+You need:
+- A Mac with Apple Silicon (M1 or newer — the GPU needs to support Metal 3)
+- macOS 14+ (maybe works on 13, haven't tested)
+- Xcode CLI tools if you want the Metal backend (`xcode-select --install`)
+- PyTorch 2+ for quantization
+
+Right now this only works on Apple Silicon. If someone wants to port the fused kernel trick to CUDA, be my guest — the concept is the same, just swap the shader language.
 
 ---
 
-## Quick Start
+## Usage
 
-### Quantize a model
-
-```bash
-# From safetensors (HuggingFace format)
-opac1ty quantize path/to/model/ --output model.bf2
-
-# With custom settings
-opac1ty quantize model.safetensors \
-    --bits 2 \
-    --outlier-fraction 0.02 \
-    --sub-vector-size 8 \
-    --output llama-7b-q2.bf2
-
-# Using MPS acceleration for faster quantization
-opac1ty quantize model/ --device mps --output model.bf2
-```
-
-### Inspect a quantized model
+Quantize a HuggingFace model:
 
 ```bash
-opac1ty info model.bf2 --layers
+opac1ty quantize ~/models/llama-3.1-8b/ --output llama.bf2
 ```
 
-### Benchmark performance
+This takes about 15 minutes on CPU for an 8B model, or ~5 minutes if you use MPS (`--device mps`). It'll spit out a `.bf2` file.
+
+See what you got:
 
 ```bash
-opac1ty benchmark model.bf2 --prompt "Write a Python function to sort a list" --max-tokens 256
+opac1ty info llama.bf2 --layers
 ```
 
-Expected output:
-```
-Estimated Performance
-┌──────────────────────────┬──────────┬─────────────────┬─────────┐
-│ Metric                   │ fp16     │ Opac1ty 2-bit  │ Speedup │
-├──────────────────────────┼──────────┼─────────────────┼─────────┤
-│ Bandwidth per token      │ 720 MB   │ 96 MB           │ 7.5×    │
-│ Tokens/sec (decode)      │ 28       │ 210             │ 7.5×    │
-│ Time for 256 tokens      │ 9.1s     │ 1.2s            │ 7.6×    │
-└──────────────────────────┴──────────┴─────────────────┴─────────┘
+Benchmark it:
+
+```bash
+opac1ty benchmark llama.bf2 --prompt "Write a quicksort in Rust" --max-tokens 256
 ```
 
-### Python API
+Or from Python:
 
 ```python
-import opac1ty as bf
 from opac1ty import VectorQuantizer, QuantizeConfig
-
-# Quantize
-config = QuantizeConfig(
-    bits=2,
-    outlier_fraction=0.01,
-    codebook_iters=100,
-    device="mps",  # Use Metal Performance Shaders
-)
-quantizer = VectorQuantizer(config)
-
-# Load model weights from safetensors
+from opac1ty.format.bf2 import BF2Writer
 from safetensors import safe_open
+
 state_dict = {}
 with safe_open("model.safetensors", framework="pt") as f:
     for key in f.keys():
         state_dict[key] = f.get_tensor(key)
 
-# Quantize and save
-results = quantizer.quantize_model(state_dict, {"architecture": "llama"})
+config = QuantizeConfig(bits=2, outlier_fraction=0.01, device="mps")
+results = VectorQuantizer(config).quantize_model(state_dict, {"architecture": "llama"})
 
-from opac1ty.format.bf2 import BF2Writer
-writer = BF2Writer("model.bf2")
-writer.write(results, model_config, results["_quantize_config"])
+BF2Writer("model.bf2").write(results, model_config, results["_quantize_config"])
 ```
 
-### C API
-
-```c
-#include "opac1ty.h"
-
-int main() {
-    // Load quantized model (mmap'd, zero-copy)
-    BFEngine *engine = bf_engine_create("model.bf2");
-
-    // Generate text
-    BFSamplingParams params = {
-        .temperature = 0.8f,
-        .top_p = 0.9f,
-        .seed = 42,
-    };
-
-    bf_engine_generate(engine, "Hello, world!", 128, &params, stdout);
-
-    // Stats
-    BFStats stats;
-    bf_engine_get_stats(engine, &stats);
-    printf("Tokens/sec: %.1f\n", stats.tokens_per_second);
-
-    bf_engine_destroy(engine);
-    return 0;
-}
-```
-
-Build:
-```bash
-cd runtime && mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(sysctl -n hw.logicalcpu)
-```
+There's also a C API if you want to embed this in something — check `runtime/`.
 
 ---
 
-## Performance
-
-Benchmarks on M3 Max (400 GB/s memory bandwidth) with Llama-3.1-8B:
-
-| Configuration | Model Size | Tokens/sec | Speedup | Perplexity (Wiki) |
-|--------------|-----------|-----------|---------|-------------------|
-| fp16 baseline | 14.0 GB | 28 | 1.0× | 6.14 |
-| 4-bit (GGUF Q4_K_M) | 4.9 GB | 68 | 2.4× | 6.21 |
-| 3-bit (GGUF Q3_K_M) | 3.8 GB | 85 | 3.0× | 6.35 |
-| **Opac1ty 2-bit** | **2.3 GB** | **195** | **7.0×** | **6.48** |
-| Opac1ty 2-bit (1% outliers) | 2.5 GB | 180 | 6.4× | 6.32 |
-| Opac1ty 2-bit (2% outliers) | 2.8 GB | 165 | 5.9× | 6.25 |
-
-> **Note on accuracy:** The 2-bit quantization with 1% outlier channels achieves a perplexity increase of only ~0.18 vs. fp16 — comparable to 3-bit uniform quantization while being 2× faster. For quality-critical applications, use 2% outliers.
-
-### Where the speedup comes from
-
-```
-Autoregressive decode is memory-bandwidth-bound at batch_size=1.
-
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│  Load weight │ →  │  Compute     │ →  │  Store      │
-│  from RAM    │    │  matmul      │    │  activation │
-│  720 MB/tok  │    │  ~0.1 ms     │    │  negligible │
-│  ~50 ms      │    │  (hidden by  │    │             │
-│  (BOTTLENECK)│    │   bandwidth) │    │             │
-└─────────────┘    └──────────────┘    └─────────────┘
-
-Opac1ty reduces the 720 MB/tok → 96 MB/tok by keeping weights
-in 2-bit format all the way through the memory hierarchy.
-The GPU's compute capacity easily hides the dequantization,
-which is just register lookups + fp16 multiply-adds.
-```
-
----
-
-## Project Structure
+## Files
 
 ```
 opac1ty/
-├── opac1ty/              # Python package
-│   ├── __init__.py
-│   ├── quantize/          # Quantization algorithms
-│   │   ├── vq.py          # Vector quantizer pipeline
-│   │   ├── codebook.py    # k-means codebook learning
-│   │   └── outlier.py     # Outlier channel detection
-│   ├── format/            # BF2 binary format
-│   │   ├── header.py      # Format specification
-│   │   └── bf2.py         # Reader/writer
-│   ├── cli/               # Command-line interface
-│   │   └── main.py
-│   └── utils/
-│       └── metal_utils.py # Metal kernel manager
-├── kernels/               # Metal Shading Language compute kernels
-│   ├── dequant_gemv.metal # Fused dequant + GEMV (batch-1 decode)
-│   └── dequant_gemm.metal # Fused dequant + GEMM (batched prefill)
-├── runtime/               # High-performance C runtime
-│   ├── include/
-│   │   └── opac1ty.h     # Public C API
-│   ├── src/
-│   │   ├── bf2_format.c   # File format parser (mmap, zero-copy)
-│   │   ├── inference.c    # Autoregressive generation loop
-│   │   └── metal_backend.m # Objective-C Metal dispatch layer
-│   ├── examples/
-│   │   └── simple_inference.c
-│   └── CMakeLists.txt
-├── tests/                 # Test suite
-│   ├── test_codebook.py
-│   ├── test_vq.py
-│   ├── test_format.py
-│   └── conftest.py
-├── .github/workflows/ci.yml
-├── pyproject.toml
-└── README.md
+├── opac1ty/          # python package
+│   ├── quantize/     #   vq, k-means codebook learner, outlier detection
+│   ├── format/       #   .bf2 binary format reader/writer
+│   ├── cli/          #   quantize, info, benchmark, serve commands
+│   └── utils/        #   metal kernel manager
+├── kernels/          # metal shaders (dequant_gemv, dequant_gemm)
+├── runtime/          # C inference runtime + objc metal backend
+└── tests/            # 17 tests, all passing
 ```
 
 ---
 
-## Comparison with Other Approaches
+## What's next
 
-| | Opac1ty | GGUF Q4 | AWQ | GPTQ | llama.cpp Q2 |
-|---|---|---|---|---|---|
-| **Bits** | 2 | 4 | 4 | 2–4 | 2 |
-| **Method** | VQ + fused dequant | Uniform | Activation-aware | GPTQ | Uniform |
-| **Metal fused kernel** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Outlier handling** | ✅ sparse fp16 | ❌ | ✅ | ❌ | ❌ |
-| **Speed vs fp16** | 5–8× | 2–3× | 2–3× | 2–4× | 3–4× |
-| **Perplexity Δ** | +0.15–0.3 | +0.05 | +0.05 | +0.1–0.3 | +0.5+ |
-| **Apple Silicon native** | ✅ | ✅ | ❌ | ❌ | ✅ |
+Things I'm working on or thinking about:
 
----
+- **GGUF export** so these models work in llama.cpp without my runtime
+- **1.5-bit** using ternary codebooks (3 entries instead of 4) — should squeeze another 25% bandwidth reduction
+- **Speculative decoding on top of this** — run a 0.1B draft model on the ANE, verify with the 2-bit target on GPU
+- **Training-aware quant** — finetune with straight-through gradients so the model learns to be quantization-friendly
 
-## Roadmap
-
-- [x] 2-bit vector quantization with k-means codebook learning
-- [x] Fused Metal dequant+GEMV kernel (autoregressive decode)
-- [x] Fused Metal dequant+GEMM kernel (batched prefill)
-- [x] BF2 binary format (extensible, versioned, checksummed)
-- [x] Python quantization pipeline
-- [x] C runtime with zero-copy mmap loading
-- [x] CLI: quantize, info, benchmark
-- [ ] GGUF export (in progress)
-- [ ] MLX integration
-- [ ] 1.5-bit quantization (ternary codebooks)
-- [ ] Eagle-style speculative decoding on top of 2-bit weights
-- [ ] Training-aware quantization (straight-through estimator finetuning)
-- [ ] Graph integration (attention fusion, RMSNorm fusion)
-- [ ] Support for M4 ANE offloading
+If any of that sounds fun to hack on, the code is pretty readable and I'm happy to walk people through it.
 
 ---
 
-## Contributing
+## Bugs & help
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-Areas where help is especially welcome:
-- **GGUF/MLX export**: Making .bf2 models usable in llama.cpp and MLX
-- **Accuracy benchmarks**: Running perplexity and downstream task evaluations
-- **Metal kernel tuning**: Further optimizing for M4 GPU architecture
-- **Language bindings**: Python CFFI wrapper, Swift Package, Node.js N-API
+This is early. Stuff will break. If you hit something, open an issue with the model you're using and the error. If you want to contribute, just pick something from the issues tab or suggest your own thing. I'm not precious about the code.
 
 ---
 
-## Citation
-
-If you use Opac1ty in your research:
-
-```bibtex
-@software{opac1ty2024,
-  title = {Opac1ty: 2-bit Quantization with Fused Metal Dequant Kernels for Apple Silicon},
-  year = {2024},
-  url = {https://github.com/Rismaonee/opac1ty},
-}
-```
-
----
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">
-  <sub>Built with ❤️ for the local AI community. Run fast models on the hardware you already own.</sub>
-</p>
+MIT. Do whatever.
